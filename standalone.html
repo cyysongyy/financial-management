@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>個人財務管理（單機版）</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #1a1d2e; --surface2: #252840;
+    --accent: #6c63ff; --green: #43e97b; --red: #f5576c; --yellow: #ffd700;
+    --text: #e2e8f0; --muted: #8892a4; --border: #2d3250; --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  nav { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 0 24px; position: sticky; top: 0; z-index: 100; height: 60px; }
+  nav .logo { font-size: 1.2rem; font-weight: 700; color: var(--accent); margin-right: auto; }
+  nav button { background: none; border: none; color: var(--muted); padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: .9rem; transition: all .2s; }
+  nav button.active, nav button:hover { background: var(--accent); color: #fff; }
+
+  .page { display: none; padding: 24px; max-width: 900px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+  .card h3 { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .stat { font-size: 2rem; font-weight: 700; }
+  .stat.green { color: var(--green); }
+  .stat.red { color: var(--red); }
+  .stat.yellow { color: var(--yellow); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+  /* BUTTONS */
+  .btn { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 10px 20px; cursor: pointer; font-size: .9rem; font-weight: 600; transition: opacity .2s; }
+  .btn:hover { opacity: .85; }
+  .btn-sm { padding: 6px 14px; font-size: .8rem; }
+  .btn-red { background: var(--red); }
+  .btn-outline { background: none; border: 1px solid var(--border); color: var(--text); }
+
+  /* FORM */
+  .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group label { font-size: .8rem; color: var(--muted); }
+  .form-group input, .form-group select { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; color: var(--text); font-size: .9rem; }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent); }
+
+  /* TABLE */
+  .tx-list { display: flex; flex-direction: column; gap: 8px; }
+  .tx-item { background: var(--surface2); border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; }
+  .tx-icon { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
+  .tx-icon.in { background: rgba(67,233,123,.15); }
+  .tx-icon.out { background: rgba(245,87,108,.15); }
+  .tx-info { flex: 1; }
+  .tx-title { font-weight: 600; font-size: .95rem; }
+  .tx-sub { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+  .tx-amount { font-weight: 700; font-size: 1rem; }
+  .tx-amount.in { color: var(--green); }
+  .tx-amount.out { color: var(--red); }
+  .tx-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; padding: 4px 8px; border-radius: 6px; }
+  .tx-del:hover { background: rgba(245,87,108,.2); color: var(--red); }
+
+  /* BUDGET */
+  .budget-item { background: var(--surface2); border-radius: 10px; padding: 16px 18px; margin-bottom: 10px; }
+  .budget-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .budget-name { font-weight: 600; }
+  .budget-amounts { font-size: .85rem; color: var(--muted); }
+  .progress-bar { height: 8px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 99px; transition: width .5s; }
+
+  /* STOCK */
+  .profit-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  .profit-card { background: var(--surface2); border-radius: var(--radius); padding: 20px; text-align: center; }
+  .profit-card .label { font-size: .8rem; color: var(--muted); margin-bottom: 8px; }
+  .profit-card .value { font-size: 1.6rem; font-weight: 700; }
+  .stock-list { display: flex; flex-direction: column; gap: 10px; }
+  .stock-item { background: var(--surface2); border-radius: 10px; padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .stock-left { flex: 1; }
+  .stock-name { font-weight: 600; font-size: .95rem; }
+  .stock-detail { font-size: .78rem; color: var(--muted); margin-top: 4px; }
+  .stock-profit { font-weight: 700; font-size: 1.1rem; text-align: right; }
+  .stock-profit.pos { color: var(--green); }
+  .stock-profit.neg { color: var(--red); }
+  .stock-profit .pct { font-size: .78rem; font-weight: 400; display: block; }
+
+  /* MODAL */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; width: 100%; max-width: 480px; }
+  .modal h2 { margin-bottom: 20px; font-size: 1.1rem; }
+  .modal-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  /* CHART */
+  .chart-wrap { position: relative; height: 280px; }
+  .dash-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+
+  /* FILTER */
+  .filter-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .filter-row select, .filter-row input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: .85rem; }
+
+  @media(max-width:600px) {
+    .grid4 { grid-template-columns: 1fr 1fr; }
+    .dash-charts { grid-template-columns: 1fr; }
+    .profit-summary { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">💰 財務管理</div>
+  <button onclick="showPage('dashboard')" id="nav-dashboard" class="active">總覽</button>
+  <button onclick="showPage('transactions')" id="nav-transactions">收支</button>
+  <button onclick="showPage('budget')" id="nav-budget">預算</button>
+  <button onclick="showPage('charts')" id="nav-charts">圖表</button>
+  <button onclick="showPage('stock')" id="nav-stock">股票</button>
+  <span id="nav-date" style="font-size:.78rem;color:var(--muted);white-space:nowrap;margin-left:4px"></span>
+  <button onclick="exportCSV()" class="btn-outline btn btn-sm" style="margin-left:4px">匯出 CSV</button>
+  <button onclick="localStorage.removeItem('fm_prefer');location.href='index.html'" class="btn-outline btn btn-sm" style="margin-left:4px;font-size:.72rem;color:var(--muted)">☁ 切換雲端版</button>
+</nav>
+
+<!-- DASHBOARD -->
+<div class="page active" id="page-dashboard">
+  <div class="grid4" style="margin-bottom:16px">
+    <div class="card"><h3>本月收入</h3><div class="stat green" id="d-income">$0</div></div>
+    <div class="card"><h3>本月支出</h3><div class="stat red" id="d-expense">$0</div></div>
+    <div class="card"><h3>本月結餘</h3><div class="stat" id="d-balance">$0</div></div>
+    <div class="card"><h3>累計淨資產</h3><div class="stat yellow" id="d-net">$0</div></div>
+  </div>
+  <div class="dash-charts">
+    <div class="card">
+      <h3>本月收支</h3>
+      <div class="chart-wrap"><canvas id="dash-donut"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>近 6 個月趨勢</h3>
+      <div class="chart-wrap"><canvas id="dash-bar"></canvas></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3>最近紀錄</h3>
+    <div class="tx-list" id="d-recent"></div>
+  </div>
+</div>
+
+<!-- TRANSACTIONS -->
+<div class="page" id="page-transactions">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="font-size:1.1rem">收支紀錄</h2>
+      <button class="btn btn-sm" onclick="openTxModal()">＋ 新增</button>
+    </div>
+    <div class="filter-row">
+      <select id="f-type" onchange="renderTxList()"><option value="">全部類型</option><option value="income">收入</option><option value="expense">支出</option></select>
+      <select id="f-month" onchange="renderTxList()"></select>
+      <input type="text" id="f-search" placeholder="搜尋..." oninput="renderTxList()" style="flex:1;min-width:120px">
+    </div>
+    <div class="tx-list" id="tx-list"></div>
+  </div>
+</div>
+
+<!-- BUDGET -->
+<div class="page" id="page-budget">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="font-size:1.1rem">預算管理</h2>
+      <button class="btn btn-sm" onclick="openBudgetModal()">＋ 設定預算</button>
+    </div>
+    <div id="budget-list"></div>
+  </div>
+</div>
+
+<!-- CHARTS -->
+<div class="page" id="page-charts">
+  <div class="grid2">
+    <div class="card"><h3>收支月比較</h3><div class="chart-wrap"><canvas id="chart-monthly"></canvas></div></div>
+    <div class="card"><h3>支出分類</h3><div class="chart-wrap"><canvas id="chart-category"></canvas></div></div>
+  </div>
+  <div class="card" style="margin-top:16px"><h3>每月趨勢</h3><div class="chart-wrap" style="height:220px"><canvas id="chart-trend"></canvas></div></div>
+</div>
+
+<!-- STOCK -->
+<div class="page" id="page-stock">
+  <div class="card" style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="font-size:1.1rem">股票盈餘追蹤</h2>
+      <button class="btn btn-sm" onclick="openStockModal()">＋ 新增持股</button>
+    </div>
+    <div class="profit-summary">
+      <div class="profit-card"><div class="label">總投入成本</div><div class="value" id="s-cost">$0</div></div>
+      <div class="profit-card"><div class="label">目前市值</div><div class="value" id="s-value">$0</div></div>
+      <div class="profit-card"><div class="label">總盈餘</div><div class="value" id="s-profit">$0</div></div>
+    </div>
+    <div class="stock-list" id="stock-list"></div>
+  </div>
+</div>
+
+<!-- TX MODAL -->
+<div class="modal-overlay" id="tx-modal">
+  <div class="modal">
+    <h2 id="tx-modal-title">新增收支</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>類型</label>
+        <select id="tx-type" onchange="updateCatOptions()"><option value="expense">支出</option><option value="income">收入</option></select>
+      </div>
+      <div class="form-group">
+        <label>金額</label>
+        <input type="number" id="tx-amount" placeholder="0" min="0">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>類別</label>
+        <select id="tx-category"></select>
+      </div>
+      <div class="form-group">
+        <label>日期</label>
+        <input type="date" id="tx-date">
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:0">
+      <label>備註</label>
+      <input type="text" id="tx-note" placeholder="選填">
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeTxModal()">取消</button>
+      <button class="btn" onclick="saveTx()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- BUDGET MODAL -->
+<div class="modal-overlay" id="budget-modal">
+  <div class="modal">
+    <h2>設定預算</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>類別</label>
+        <input type="text" id="b-category" placeholder="餐飲 / 交通...">
+      </div>
+      <div class="form-group">
+        <label>每月預算</label>
+        <input type="number" id="b-amount" placeholder="0" min="0">
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeBudgetModal()">取消</button>
+      <button class="btn" onclick="saveBudget()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- STOCK MODAL -->
+<div class="modal-overlay" id="stock-modal">
+  <div class="modal">
+    <h2 id="stock-modal-title">新增持股</h2>
+    <div class="form-row">
+      <div class="form-group" style="grid-column:1/-1">
+        <label>股票名稱／代號</label>
+        <input type="text" id="s-name" placeholder="台積電 / 2330">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>持有股數</label>
+        <input type="number" id="s-shares" placeholder="1000" min="0">
+      </div>
+      <div class="form-group">
+        <label>平均成本（元/股）</label>
+        <input type="number" id="s-cost-per" placeholder="500" min="0" step="0.01">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>目前股價（元/股）</label>
+        <input type="number" id="s-price" placeholder="600" min="0" step="0.01">
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeStockModal()">取消</button>
+      <button class="btn" onclick="saveStock()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CATEGORIES ────────────────────────────────────────
+const EXPENSE_CATS = ['餐飲','交通','購物','娛樂','醫療','住房','家用','孝親費','教育','保險','股票','旅遊','其他支出'];
+const INCOME_CATS  = ['薪資','獎金','投資收益','兼職','房租','股票','其他收入'];
+function updateCatOptions(keepVal) {
+  const type = document.getElementById('tx-type').value;
+  const sel  = document.getElementById('tx-category');
+  const prev = keepVal || sel.value;
+  sel.innerHTML = (type==='income'?INCOME_CATS:EXPENSE_CATS).map(c=>`<option value="${c}">${c}</option>`).join('');
+  if (prev && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
+}
+
+// ── DATA ──────────────────────────────────────────────
+let txs     = JSON.parse(localStorage.getItem('fm_txs')     || '[]');
+let budgets = JSON.parse(localStorage.getItem('fm_budgets') || '[]');
+let stocks  = JSON.parse(localStorage.getItem('fm_stocks')  || '[]');
+
+function save() {
+  localStorage.setItem('fm_txs',     JSON.stringify(txs));
+  localStorage.setItem('fm_budgets', JSON.stringify(budgets));
+  localStorage.setItem('fm_stocks',  JSON.stringify(stocks));
+}
+
+// ── NAVIGATION ────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button[id^="nav-"]').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  if (name === 'dashboard')    renderDashboard();
+  if (name === 'transactions') renderTxList();
+  if (name === 'budget')       renderBudgets();
+  if (name === 'charts')       renderCharts();
+  if (name === 'stock')        renderStocks();
+}
+
+// ── HELPERS ───────────────────────────────────────────
+const fmt = n => '$' + Number(n).toLocaleString('zh-TW');
+const today = () => new Date().toISOString().slice(0,10);
+const nowYM  = () => today().slice(0,7);
+
+function monthsBack(n) {
+  const d = new Date();
+  d.setMonth(d.getMonth() - n);
+  return d.toISOString().slice(0,7);
+}
+
+// ── DASHBOARD ─────────────────────────────────────────
+let donutChart, barChart;
+function renderDashboard() {
+  const ym = nowYM();
+  const monthTxs = txs.filter(t => t.date.startsWith(ym));
+  const income  = monthTxs.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0);
+  const expense = monthTxs.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amount,0);
+  const allIncome  = txs.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0);
+  const allExpense = txs.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amount,0);
+  document.getElementById('d-income').textContent  = fmt(income);
+  document.getElementById('d-expense').textContent = fmt(expense);
+  const bal = income - expense;
+  const balEl = document.getElementById('d-balance');
+  balEl.textContent = fmt(bal);
+  balEl.className = 'stat ' + (bal>=0?'green':'red');
+  document.getElementById('d-net').textContent = fmt(allIncome - allExpense);
+
+  // donut
+  const ctx1 = document.getElementById('dash-donut').getContext('2d');
+  if (donutChart) donutChart.destroy();
+  donutChart = new Chart(ctx1, {
+    type:'doughnut',
+    data:{labels:['收入','支出'],datasets:[{data:[income,expense],backgroundColor:['#43e97b','#f5576c'],borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e2e8f0'}}}}
+  });
+
+  // 6-month bar
+  const labels=[],incArr=[],expArr=[];
+  for(let i=5;i>=0;i--){
+    const ym2=monthsBack(i);
+    labels.push(ym2.slice(5)+' 月');
+    const ms=txs.filter(t=>t.date.startsWith(ym2));
+    incArr.push(ms.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0));
+    expArr.push(ms.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amount,0));
+  }
+  const ctx2 = document.getElementById('dash-bar').getContext('2d');
+  if (barChart) barChart.destroy();
+  barChart = new Chart(ctx2, {
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'收入',data:incArr,backgroundColor:'rgba(67,233,123,.7)'},
+      {label:'支出',data:expArr,backgroundColor:'rgba(245,87,108,.7)'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#8892a4'}},y:{ticks:{color:'#8892a4'},grid:{color:'#2d3250'}}},plugins:{legend:{labels:{color:'#e2e8f0'}}}}
+  });
+
+  // recent
+  const recent = [...monthTxs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  document.getElementById('d-recent').innerHTML = recent.map(txHTML).join('') || '<p style="color:var(--muted);text-align:center;padding:20px">尚無紀錄</p>';
+}
+
+// ── TRANSACTIONS ──────────────────────────────────────
+let editTxId = null;
+function openTxModal(id) {
+  editTxId = id || null;
+  document.getElementById('tx-modal-title').textContent = id ? '編輯收支' : '新增收支';
+  if (id) {
+    const t = txs.find(x=>x.id===id);
+    document.getElementById('tx-type').value   = t.type;
+    document.getElementById('tx-amount').value = t.amount;
+    document.getElementById('tx-date').value   = t.date;
+    document.getElementById('tx-note').value   = t.note||'';
+    updateCatOptions(t.category);
+  } else {
+    document.getElementById('tx-type').value   = 'expense';
+    document.getElementById('tx-amount').value = '';
+    document.getElementById('tx-date').value   = today();
+    document.getElementById('tx-note').value   = '';
+    updateCatOptions();
+  }
+  document.getElementById('tx-modal').classList.add('open');
+}
+function closeTxModal() { document.getElementById('tx-modal').classList.remove('open'); }
+function saveTx() {
+  const amount = parseFloat(document.getElementById('tx-amount').value);
+  if (!amount || amount<=0) return alert('請輸入金額');
+  const data = {
+    type:     document.getElementById('tx-type').value,
+    amount,
+    category: document.getElementById('tx-category').value,
+    date:     document.getElementById('tx-date').value || today(),
+    note:     document.getElementById('tx-note').value,
+  };
+  if (editTxId) {
+    const i = txs.findIndex(x=>x.id===editTxId);
+    txs[i] = { ...txs[i], ...data };
+  } else {
+    txs.push({ id: Date.now().toString(), ...data });
+  }
+  save(); closeTxModal(); renderTxList(); renderDashboard();
+}
+function deleteTx(id) {
+  if (!confirm('確定刪除？')) return;
+  txs = txs.filter(t=>t.id!==id);
+  save(); renderTxList(); renderDashboard();
+}
+function txHTML(t) {
+  return `<div class="tx-item">
+    <div class="tx-icon ${t.type==='income'?'in':'out'}">${t.type==='income'?'💰':'💸'}</div>
+    <div class="tx-info">
+      <div class="tx-title">${t.category}</div>
+      <div class="tx-sub">${t.date}${t.note?' · '+t.note:''}</div>
+    </div>
+    <div class="tx-amount ${t.type==='income'?'in':'out'}">${t.type==='income'?'+':'-'}${fmt(t.amount)}</div>
+    <button class="tx-del" onclick="openTxModal('${t.id}')">✏️</button>
+    <button class="tx-del" onclick="deleteTx('${t.id}')">🗑</button>
+  </div>`;
+}
+function renderTxList() {
+  const fType   = document.getElementById('f-type').value;
+  const fMonth  = document.getElementById('f-month').value;
+  const fSearch = document.getElementById('f-search').value.toLowerCase();
+  // populate month filter（從本月起升序，預設選本月）
+  const months = [...new Set(txs.map(t=>t.date.slice(0,7)))]
+    .filter(m => m >= nowYM())
+    .sort();
+  const mSel = document.getElementById('f-month');
+  const curM = mSel.value || nowYM();
+  mSel.innerHTML = '<option value="">全部月份</option>' + months.map(m=>`<option value="${m}" ${m===curM?'selected':''}>${m}</option>`).join('');
+  const fMonthEffective = mSel.value;
+  let list = [...txs].sort((a,b)=>a.date.localeCompare(b.date));
+  if (fMonthEffective) {
+    list = list.filter(t=>t.date.startsWith(fMonthEffective));
+  } else {
+    list = list.filter(t=>t.date.slice(0,7)>=nowYM());
+  }
+  if (fType)   list = list.filter(t=>t.type===fType);
+  if (fSearch) list = list.filter(t=>(t.category+t.note).toLowerCase().includes(fSearch));
+  document.getElementById('tx-list').innerHTML = list.map(txHTML).join('') || '<p style="color:var(--muted);text-align:center;padding:30px">尚無紀錄</p>';
+}
+
+// ── BUDGET ────────────────────────────────────────────
+let editBudgetId = null;
+function openBudgetModal(id) {
+  editBudgetId = id || null;
+  if (id) {
+    const b = budgets.find(x=>x.id===id);
+    document.getElementById('b-category').value = b.category;
+    document.getElementById('b-amount').value   = b.amount;
+  } else {
+    document.getElementById('b-category').value = '';
+    document.getElementById('b-amount').value   = '';
+  }
+  document.getElementById('budget-modal').classList.add('open');
+}
+function closeBudgetModal() { document.getElementById('budget-modal').classList.remove('open'); }
+function saveBudget() {
+  const category = document.getElementById('b-category').value.trim();
+  const amount   = parseFloat(document.getElementById('b-amount').value);
+  if (!category) return alert('請輸入類別');
+  if (!amount || amount<=0) return alert('請輸入預算金額');
+  if (editBudgetId) {
+    const i = budgets.findIndex(x=>x.id===editBudgetId);
+    budgets[i] = { ...budgets[i], category, amount };
+  } else {
+    budgets.push({ id: Date.now().toString(), category, amount });
+  }
+  save(); closeBudgetModal(); renderBudgets();
+}
+function deleteBudget(id) {
+  if (!confirm('確定刪除？')) return;
+  budgets = budgets.filter(b=>b.id!==id);
+  save(); renderBudgets();
+}
+function renderBudgets() {
+  const ym = nowYM();
+  const monthExp = txs.filter(t=>t.type==='expense'&&t.date.startsWith(ym));
+  document.getElementById('budget-list').innerHTML = budgets.map(b => {
+    const spent = monthExp.filter(t=>t.category===b.category).reduce((a,t)=>a+t.amount,0);
+    const pct   = Math.min(100, Math.round(spent/b.amount*100));
+    const color = pct>=100?'var(--red)':pct>=80?'var(--yellow)':'var(--green)';
+    return `<div class="budget-item">
+      <div class="budget-header">
+        <span class="budget-name">${b.category}</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="budget-amounts">${fmt(spent)} / ${fmt(b.amount)}</span>
+          <button class="btn btn-sm btn-outline" onclick="openBudgetModal('${b.id}')">✏️</button>
+          <button class="btn btn-sm btn-red" onclick="deleteBudget('${b.id}')">刪除</button>
+        </div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>
+      <div style="font-size:.78rem;color:var(--muted);margin-top:6px">${pct}% 已使用</div>
+    </div>`;
+  }).join('') || '<p style="color:var(--muted);text-align:center;padding:30px">尚未設定預算</p>';
+}
+
+// ── CHARTS ────────────────────────────────────────────
+let chartMonthly, chartCat, chartTrend;
+function renderCharts() {
+  // monthly income/expense
+  const months6 = Array.from({length:6},(_,i)=>monthsBack(5-i));
+  const labels6  = months6.map(m=>m.slice(5)+' 月');
+  const inc6 = months6.map(m=>txs.filter(t=>t.type==='income'&&t.date.startsWith(m)).reduce((a,t)=>a+t.amount,0));
+  const exp6 = months6.map(m=>txs.filter(t=>t.type==='expense'&&t.date.startsWith(m)).reduce((a,t)=>a+t.amount,0));
+
+  if (chartMonthly) chartMonthly.destroy();
+  chartMonthly = new Chart(document.getElementById('chart-monthly').getContext('2d'), {
+    type:'bar', data:{labels:labels6,datasets:[{label:'收入',data:inc6,backgroundColor:'rgba(67,233,123,.7)'},{label:'支出',data:exp6,backgroundColor:'rgba(245,87,108,.7)'}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#8892a4'}},y:{ticks:{color:'#8892a4'},grid:{color:'#2d3250'}}},plugins:{legend:{labels:{color:'#e2e8f0'}}}}
+  });
+
+  // category pie
+  const cats = {}; txs.filter(t=>t.type==='expense').forEach(t=>cats[t.category]=(cats[t.category]||0)+t.amount);
+  const catLabels = Object.keys(cats); const catVals = Object.values(cats);
+  const colors = ['#6c63ff','#f5576c','#43e97b','#ffd700','#00d4ff','#ff6b6b','#a29bfe','#fd79a8'];
+  if (chartCat) chartCat.destroy();
+  chartCat = new Chart(document.getElementById('chart-category').getContext('2d'), {
+    type:'doughnut', data:{labels:catLabels,datasets:[{data:catVals,backgroundColor:colors,borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e2e8f0'}}}}
+  });
+
+  // trend line
+  if (chartTrend) chartTrend.destroy();
+  const net6 = inc6.map((v,i)=>v-exp6[i]);
+  chartTrend = new Chart(document.getElementById('chart-trend').getContext('2d'), {
+    type:'line', data:{labels:labels6,datasets:[{label:'結餘',data:net6,borderColor:'#6c63ff',backgroundColor:'rgba(108,99,255,.1)',fill:true,tension:.4}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#8892a4'}},y:{ticks:{color:'#8892a4'},grid:{color:'#2d3250'}}},plugins:{legend:{labels:{color:'#e2e8f0'}}}}
+  });
+}
+
+// ── STOCK ─────────────────────────────────────────────
+let editStockId = null;
+function openStockModal(id) {
+  editStockId = id || null;
+  document.getElementById('stock-modal-title').textContent = id ? '編輯持股' : '新增持股';
+  if (id) {
+    const s = stocks.find(x=>x.id===id);
+    document.getElementById('s-name').value     = s.name;
+    document.getElementById('s-shares').value   = s.shares;
+    document.getElementById('s-cost-per').value = s.costPer;
+    document.getElementById('s-price').value    = s.price;
+  } else {
+    document.getElementById('s-name').value     = '';
+    document.getElementById('s-shares').value   = '';
+    document.getElementById('s-cost-per').value = '';
+    document.getElementById('s-price').value    = '';
+  }
+  document.getElementById('stock-modal').classList.add('open');
+}
+function closeStockModal() { document.getElementById('stock-modal').classList.remove('open'); }
+function saveStock() {
+  const name    = document.getElementById('s-name').value.trim();
+  const shares  = parseFloat(document.getElementById('s-shares').value);
+  const costPer = parseFloat(document.getElementById('s-cost-per').value);
+  const price   = parseFloat(document.getElementById('s-price').value);
+  if (!name) return alert('請輸入股票名稱');
+  if (!shares||shares<=0) return alert('請輸入股數');
+  if (!costPer||costPer<=0) return alert('請輸入成本');
+  if (!price||price<=0) return alert('請輸入目前股價');
+  const data = { name, shares, costPer, price };
+  if (editStockId) {
+    const i = stocks.findIndex(x=>x.id===editStockId);
+    stocks[i] = { ...stocks[i], ...data };
+  } else {
+    stocks.push({ id: Date.now().toString(), ...data });
+  }
+  save(); closeStockModal(); renderStocks();
+}
+function deleteStock(id) {
+  if (!confirm('確定刪除？')) return;
+  stocks = stocks.filter(s=>s.id!==id);
+  save(); renderStocks();
+}
+function renderStocks() {
+  let totalCost=0, totalValue=0;
+  const html = stocks.map(s => {
+    const cost   = s.shares * s.costPer;
+    const value  = s.shares * s.price;
+    const profit = value - cost;
+    const pct    = cost > 0 ? ((profit/cost)*100).toFixed(2) : 0;
+    totalCost  += cost;
+    totalValue += value;
+    return `<div class="stock-item">
+      <div class="stock-left">
+        <div class="stock-name">${s.name}</div>
+        <div class="stock-detail">${s.shares.toLocaleString()} 股 · 成本 $${s.costPer} · 現價 $${s.price}</div>
+      </div>
+      <div class="stock-profit ${profit>=0?'pos':'neg'}">
+        ${profit>=0?'+':''}${fmt(profit)}
+        <span class="pct">${profit>=0?'▲':'▼'} ${Math.abs(pct)}%</span>
+      </div>
+      <button class="btn btn-sm btn-outline" style="margin-left:8px" onclick="openStockModal('${s.id}')">✏️</button>
+      <button class="btn btn-sm btn-red" onclick="deleteStock('${s.id}')">刪除</button>
+    </div>`;
+  }).join('');
+
+  const totalProfit = totalValue - totalCost;
+  document.getElementById('s-cost').textContent   = fmt(totalCost);
+  document.getElementById('s-value').textContent  = fmt(totalValue);
+  const profEl = document.getElementById('s-profit');
+  profEl.textContent = (totalProfit>=0?'+':'') + fmt(totalProfit);
+  profEl.style.color = totalProfit>=0 ? 'var(--green)' : 'var(--red)';
+
+  document.getElementById('stock-list').innerHTML = html || '<p style="color:var(--muted);text-align:center;padding:30px">尚未新增持股</p>';
+}
+
+// ── EXPORT ────────────────────────────────────────────
+function exportCSV() {
+  const rows = [['日期','類型','類別','金額','備註']];
+  [...txs].sort((a,b)=>a.date.localeCompare(b.date)).forEach(t=>{
+    rows.push([t.date, t.type==='income'?'收入':'支出', t.category, t.amount, t.note||'']);
+  });
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);
+  a.download = 'financial-' + today() + '.csv';
+  a.click();
+}
+
+// ── CLOSE MODAL ON OVERLAY CLICK ─────────────────────
+document.querySelectorAll('.modal-overlay').forEach(el=>{
+  el.addEventListener('click', e=>{ if(e.target===el) el.classList.remove('open'); });
+});
+
+// ── INIT ──────────────────────────────────────────────
+localStorage.setItem('fm_prefer','standalone');
+document.getElementById('tx-date').value = today();
+updateCatOptions();
+renderDashboard();
+(function updateNavDate(){
+  const el = document.getElementById('nav-date');
+  if(el){ const d=new Date(); el.textContent=`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`; }
+  setTimeout(updateNavDate, 60000);
+})();
+</script>
+</body>
+</html>
